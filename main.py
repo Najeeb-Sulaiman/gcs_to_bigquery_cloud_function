@@ -12,11 +12,21 @@ PROJECT_ID = os.getenv("PROJECT_ID")
 DATASET_ID = os.getenv("DATASET_ID")
 AUDIT_TABLE_ID = os.getenv("AUDIT_TABLE_ID")
 
-# Function to log event metadata to BigQuery audit table
+
 def log_event_to_audit_table(event_metadata):
+    """
+    Function to log event metadata to BigQuery audit table.
+    
+    Parameters:
+    event_metadata (dict): Metadata to be inserted into the audit log table.
+
+    Performs:
+    Insert metadata rows into Bigquery audit table.
+    
+    """
     audit_table_ref = f"{PROJECT_ID}.{DATASET_ID}.{AUDIT_TABLE_ID}"
     
-    # Construct the rows to insert
+    # Constructing the rows to insert
     rows_to_insert = [event_metadata]
 
     # Insert rows into BigQuery audit table
@@ -25,20 +35,25 @@ def log_event_to_audit_table(event_metadata):
         logging.error(f"Failed to log event metadata: {errors}")
 
 
-def load_data_to_bigquery(data, context):
+def load_data_to_bigquery(event, context):
     """
-    Cloud Function triggered by a change to a Cloud Storage bucket.
+    Triggered by a change to a Cloud Storage bucket. Loads data into BigQuery.
+
+    Parameters:
+    event (dict): Event payload containing bucket and file details.
+    context (dict): Metadata for the event.
+
     This function loads a CSV file from Cloud Storage into a BigQuery table.
     """
-    bucket_name = data["bucket"]
-    file_name = data["name"]
+    bucket_name = event["bucket"]
+    file_name = event["name"]
     table_name = file_name.split('.')[0]
     table_name = table_name.replace(' ', '_')
 
-    # Construct the BigQuery table ID
+    # Constructinging the BigQuery table ID
     table_ref = f"{PROJECT_ID}.{DATASET_ID}.100_{table_name}"
 
-    # Construct the URI for the CSV file in GCS
+    # Constructing the URI for the CSV file in GCS
     uri = f"gs://{bucket_name}/{file_name}"
 
     # Prepare event metadata
@@ -55,35 +70,17 @@ def load_data_to_bigquery(data, context):
     
     logging.info(f"Starting load for {uri} into BigQuery table {table_ref}")
 
-    # Configure the load job
-    if table_name == "vehicle_line_mapping":
-        job_config = bigquery.LoadJobConfig(
-        source_format=bigquery.SourceFormat.CSV,
+    job_config = bigquery.LoadJobConfig(
         skip_leading_rows=1,  # Skip the header row
+        autodetect=True,      # Automatically infer schema
         field_delimiter=",",
         allow_quoted_newlines=True,
         quote_character='"',
-        schema=[
-            bigquery.SchemaField("nameplate_code", "STRING"),
-            bigquery.SchemaField("brand", "STRING"),
-            bigquery.SchemaField("platform", "STRING"),
-            bigquery.SchemaField("nameplate_display", "STRING")
-        ],
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE  # Append data to existing table
     )
-    else:
-        job_config = bigquery.LoadJobConfig(
-            source_format=bigquery.SourceFormat.CSV,
-            skip_leading_rows=1,  # Skip the header row
-            autodetect=True,      # Automatically infer schema
-            field_delimiter=",",
-            allow_quoted_newlines=True,
-            quote_character='"',
-            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE  # Append data to existing table
-        )
 
     try:
-        # Load data from GCS to BigQuery
+        # Loading data from GCS to BigQuery
         load_job = bq_client.load_table_from_uri(
             uri,
             table_ref,
