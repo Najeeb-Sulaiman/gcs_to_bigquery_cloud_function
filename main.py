@@ -29,7 +29,7 @@ def log_event_to_audit_table(event_metadata):
     # Constructing the rows to insert
     rows_to_insert = [event_metadata]
 
-    # Inserting rows into BigQuery audit table
+    # Insert rows into BigQuery audit table
     errors = bq_client.insert_rows_json(audit_table_ref, rows_to_insert)
     if errors:
         logging.error(f"Failed to log event metadata: {errors}")
@@ -65,7 +65,6 @@ def load_data_to_bigquery(event, context):
         "bucket_name": bucket_name,
         "file_name": file_name,
         "status": "Pending",
-        "inserted_rows": 0,
         "error_message": None
     }
     
@@ -79,13 +78,6 @@ def load_data_to_bigquery(event, context):
         quote_character='"',
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE  # Append data to existing table
     )
-    
-    # Get the destination table existing record count
-    try:
-        table_count = bq_client.get_table(table_ref)
-        table_count_prev = table_count.num_rows
-    except Exception as e:
-        logging.info("Table does not exist yet")
 
     try:
         # Loading data from GCS to BigQuery
@@ -101,13 +93,7 @@ def load_data_to_bigquery(event, context):
 
         # Get the destination table and log the rows
         table = bq_client.get_table(table_ref)
-        table_count =table.num_rows
-        if table_count_prev > 0:
-            inserted_rows = table_count - table_count_prev
-        else:
-            inserted_rows = table_count
-
-        logging.info(f"Loaded {inserted_rows} rows into {table_ref}")
+        logging.info(f"Loaded {table.num_rows} rows into {table_ref}")
 
          # Check for errors in load job
         if load_job.errors:
@@ -116,7 +102,6 @@ def load_data_to_bigquery(event, context):
             logging.error(f"Load job errors: {load_job.errors}")
         else:
             event_metadata["status"] = "Success"
-            event_metadata["inserted_rows"] = inserted_rows
             logging.info(f"Successfully loaded {file_name} into {table_ref}")
 
 
